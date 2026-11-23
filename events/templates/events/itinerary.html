@@ -1,0 +1,165 @@
+{% extends 'events/base.html' %}
+
+{% block title %}My Event Itinerary & Budget{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">My Event Itinerary</h2>
+            <p class="text-muted">Manage your saved events, ticket counts, and budget targets</p>
+        </div>
+        <a href="{% url 'index' %}" class="btn btn-outline-primary">
+            <i class="bi bi-search"></i> Search More Events
+        </a>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-primary shadow-sm">
+                <div class="card-body">
+                    <span class="text-muted small text-uppercase">Saved Events</span>
+                    <h3 class="fw-bold mb-0" id="summaryEventCount">{{ events.count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-info shadow-sm">
+                <div class="card-body">
+                    <span class="text-muted small text-uppercase">Total Tickets Planned</span>
+                    <h3 class="fw-bold mb-0" id="summaryTicketCount">{{ total_tickets }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-success shadow-sm">
+                <div class="card-body">
+                    <span class="text-muted small text-uppercase">Total Estimated Budget</span>
+                    <h3 class="fw-bold text-success mb-0">$<span id="summaryTotalBudget">{{ total_budget|floatformat:2 }}</span></h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="itineraryList" class="vstack gap-3">
+        {% for event in events %}
+        <div class="card shadow-sm saved-card" id="card-{{ event.id }}" data-pk="{{ event.id }}">
+            <div class="row g-0 align-items-center">
+                <div class="col-md-3">
+                    <img src="{{ event.image_url }}" class="img-fluid rounded-start h-100 object-fit-cover" style="min-height: 180px;">
+                </div>
+                <div class="col-md-6 p-3">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <h5 class="fw-bold mb-0">{{ event.event_name }}</h5>
+                    </div>
+                    <p class="text-muted small mb-2">
+                        <i class="bi bi-geo-alt-fill text-danger"></i> {{ event.venue_name }} ({{ event.venue_location }}) &bull;
+                        <strong>{{ event.event_date }}</strong> {{ event.event_time }}
+                    </p>
+
+                    <div class="row g-2 mt-1">
+                        <div class="col-sm-4">
+                            <label class="form-label small mb-0">Max Budget ($)</label>
+                            <input type="number" step="0.01" class="form-control form-control-sm edit-budget" value="{{ event.max_ticket_budget }}">
+                        </div>
+                        <div class="col-sm-3">
+                            <label class="form-label small mb-0">Qty</label>
+                            <input type="number" min="1" class="form-control form-control-sm edit-qty" value="{{ event.ticket_quantity }}">
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label small mb-0">Priority</label>
+                            <select class="form-select form-select-sm edit-priority">
+                                <option value="MUST" {% if event.priority == 'MUST' %}selected{% endif %}>Must-Go</option>
+                                <option value="MAYBE" {% if event.priority == 'MAYBE' %}selected{% endif %}>Maybe</option>
+                                <option value="BACKUP" {% if event.priority == 'BACKUP' %}selected{% endif %}>Backup</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <input type="text" class="form-control form-control-sm edit-notes" placeholder="Notes..." value="{{ event.notes }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 p-3 text-md-end text-center border-start">
+                    <div class="small text-muted">Subtotal</div>
+                    <div class="h5 fw-bold text-success mb-3">$<span class="item-subtotal">{{ event.total_cost|floatformat:2 }}</span></div>
+                    <button class="btn btn-success btn-sm w-100 mb-2 update-event-btn">
+                        <i class="bi bi-save"></i> Save Changes
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm w-100 delete-event-btn">
+                        <i class="bi bi-trash"></i> Remove
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="card p-5 text-center shadow-sm">
+            <p class="lead mb-3">Your itinerary is currently empty.</p>
+            <a href="{% url 'index' %}" class="btn btn-primary">Find Events to Add</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+$(document).on("click", ".update-event-btn", function() {
+    const card = $(this).closest(".saved-card");
+    const pk = card.data("pk");
+    const btn = $(this);
+
+    $.ajax({
+        url: `/api/events/update/${pk}/`,
+        type: "POST",
+        headers: { "X-CSRFToken": getCookie("csrftoken") },
+        contentType: "application/json",
+        data: JSON.stringify({
+            max_ticket_budget: card.find(".edit-budget").val(),
+            ticket_quantity: card.find(".edit-qty").val(),
+            priority: card.find(".edit-priority").val(),
+            notes: card.find(".edit-notes").val()
+        }),
+        success: function(res) {
+            card.find(".item-subtotal").text(res.item_total.toFixed(2));
+            $("#summaryTotalBudget").text(res.overall_budget.toFixed(2));
+            $("#summaryTicketCount").text(res.overall_tickets);
+            btn.html('<i class="bi bi-check2"></i> Updated!');
+            setTimeout(() => btn.html('<i class="bi bi-save"></i> Save Changes'), 1500);
+        }
+    });
+});
+
+$(document).on("click", ".delete-event-btn", function() {
+    if (!confirm("Remove this event from your itinerary?")) return;
+    const card = $(this).closest(".saved-card");
+    const pk = card.data("pk");
+
+    $.ajax({
+        url: `/api/events/delete/${pk}/`,
+        type: "POST",
+        headers: { "X-CSRFToken": getCookie("csrftoken") },
+        success: function(res) {
+            card.fadeOut(300, function() { $(this).remove(); });
+            $("#summaryTotalBudget").text(res.overall_budget.toFixed(2));
+            $("#summaryTicketCount").text(res.overall_tickets);
+            $("#summaryEventCount").text(res.remaining_count);
+        }
+    });
+});
+</script>
+{% endblock %}
